@@ -10,34 +10,39 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
       - name: Create Project
         run: |
-          cat > build.gradle <<'EOF'
-          plugins { id 'com.android.application' version '8.2.0' apply false; id 'org.jetbrains.kotlin.android' version '1.9.0' apply false }
-          EOF
-          cat > settings.gradle <<'EOF'
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
-          rootProject.name = "Khoji Auto Reply"
-          include ':app'
-          EOF
+          rm -rf app build.gradle settings.gradle gradle* .gradle
           mkdir -p app/src/main/java/com/khoji/autoreply
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          cat > settings.gradle <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name = "Khoji"
+          include ':app'
+          EOF
+          cat > build.gradle <<'EOF'
+          plugins { id 'com.android.application' version '8.2.1' apply false; id 'org.jetbrains.kotlin.android' version '1.9.10' apply false }
+          EOF
           cat > app/build.gradle <<'EOF'
           plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
           android { namespace 'com.khoji.autoreply'; compileSdk 34; defaultConfig { applicationId "com.khoji.autoreply"; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" }; buildTypes { release { minifyEnabled false } }; compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }; kotlinOptions { jvmTarget = '17' } }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0'; implementation 'androidx.core:core-ktx:1.12.0' }
+          dependencies { implementation 'androidx.core:core-ktx:1.12.0'; implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }
           EOF
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="Khoji Auto Reply" android:theme="@Theme.AppCompat.Light.DarkActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity><service android:name=".AutoReplyService" android:label="Khoji Auto Reply" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true"><intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter></service></application></manifest>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"><uses-permission android:name="android.permission.POST_NOTIFICATIONS"/><application android:label="Khoji Auto Reply" android:theme="@android:style/Theme.Light"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity><service android:name=".AutoReplyService" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true"><intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter></service></application></manifest>
           EOF
           cat > app/src/main/res/values/strings.xml <<'EOF'
-          <resources><string name="app_name">Khoji Auto Reply</string></resources>
+          <resources><string name="app_name">Khoji</string></resources>
           EOF
           cat > app/src/main/res/layout/activity_main.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="20dp"><TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Khoji - 24h Auto Reply" android:textSize="20sp" android:textStyle="bold"/><Button android:id="@+id/btnPermission" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="Permission ON Koro"/><EditText android:id="@+id/etReply" android:layout_width="match_parent" android:layout_height="120dp" android:layout_marginTop="20dp" android:hint="Khoji er reply likho" android:gravity="top"/><Button android:id="@+id/btnSave" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="Save"/></LinearLayout>
+          <?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="24dp"><TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Khoji 24h Auto Reply" android:textSize="20sp" android:textStyle="bold"/><Button android:id="@+id/btnPermission" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="Permission ON"/><EditText android:id="@+id/etReply" android:layout_width="match_parent" android:layout_height="120dp" android:layout_marginTop="20dp" android:hint="Reply likho"/><Button android:id="@+id/btnSave" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Save"/></LinearLayout>
           EOF
           cat > app/src/main/java/com/khoji/autoreply/MainActivity.kt <<'EOF'
           package com.khoji.autoreply
@@ -48,17 +53,7 @@ jobs:
           import android.widget.EditText
           import android.widget.Toast
           import androidx.appcompat.app.AppCompatActivity
-          class MainActivity : AppCompatActivity() {
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  setContentView(R.layout.activity_main)
-                  val etReply = findViewById<EditText>(R.id.etReply)
-                  val prefs = getSharedPreferences("khoji_prefs", MODE_PRIVATE)
-                  etReply.setText(prefs.getString("reply_text", "Assalamu Alaikum, Khoji te welcome!"))
-                  findViewById<Button>(R.id.btnPermission).setOnClickListener { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
-                  findViewById<Button>(R.id.btnSave).setOnClickListener { prefs.edit().putString("reply_text", etReply.text.toString()).apply(); Toast.makeText(this, "Save hoyeche!", Toast.LENGTH_SHORT).show() }
-              }
-          }
+          class MainActivity:AppCompatActivity(){override fun onCreate(b:Bundle?){super.onCreate(b);setContentView(R.layout.activity_main);val et=findViewById<EditText>(R.id.etReply);val p=getSharedPreferences("khoji_prefs",MODE_PRIVATE);et.setText(p.getString("reply_text","Khoji te welcome!"));findViewById<Button>(R.id.btnPermission).setOnClickListener{startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))};findViewById<Button>(R.id.btnSave).setOnClickListener{p.edit().putString("reply_text",et.text.toString()).apply();Toast.makeText(this,"Saved",Toast.LENGTH_SHORT).show()}}}
           EOF
           cat > app/src/main/java/com/khoji/autoreply/AutoReplyService.kt <<'EOF'
           package com.khoji.autoreply
@@ -67,35 +62,19 @@ jobs:
           import android.os.Bundle
           import android.service.notification.NotificationListenerService
           import android.service.notification.StatusBarNotification
-          class AutoReplyService : NotificationListenerService() {
-              private val supported = listOf("com.whatsapp","com.whatsapp.w4b","com.facebook.orca","com.zhiliaoapp.musically","com.ss.android.ugc.trill")
-              override fun onNotificationPosted(sbn: StatusBarNotification?) {
-                  if (sbn == null) return
-                  if (sbn.packageName !in supported) return
-                  val prefs = getSharedPreferences("khoji_prefs", MODE_PRIVATE)
-                  val replyText = prefs.getString("reply_text", "Khoji te welcome!")!!
-                  val actions = sbn.notification.actions ?: return
-                  for (action in actions) {
-                      val ri = action.remoteInputs ?: continue
-                      if (ri.isNotEmpty()) {
-                          try { val intent = Intent(); val bundle = Bundle(); for (r in ri) bundle.putCharSequence(r.resultKey, replyText); RemoteInput.addResultsToIntent(ri, intent, bundle); action.actionIntent.send(this, 0, intent) } catch (e: Exception) {}
-                          break
-                      }
-                  }
-              }
-          }
+          class AutoReplyService:NotificationListenerService(){private val ok=listOf("com.whatsapp","com.whatsapp.w4b","com.facebook.orca","com.zhiliaoapp.musically","com.ss.android.ugc.trill");override fun onNotificationPosted(s:StatusBarNotification?){if(s==null)return;if(s.packageName !in ok)return;val r=getSharedPreferences("khoji_prefs",MODE_PRIVATE).getString("reply_text","Hi, Khoji here!")!!;val acts=s.notification.actions?:return;for(a in acts){val ri=a.remoteInputs?:continue;if(ri.isNotEmpty()){try{val i=Intent();val b=Bundle();for(x in ri)b.putCharSequence(x.resultKey,r);RemoteInput.addResultsToIntent(ri,i,b);a.actionIntent.send(this,0,i)}catch(_:Exception){};break}}}}
           EOF
-      - name: Build APK
+      - name: Build with Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.6'
-      - name: Build Debug APK
+      - name: Build APK
         run: |
           gradle wrapper
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --stacktrace
+          ./gradlew :app:assembleDebug --info
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Khoji-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk
