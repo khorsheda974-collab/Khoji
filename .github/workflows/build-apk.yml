@@ -10,21 +10,24 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Create Project
+      - name: Fix SDK
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          rm -rf app build.gradle settings.gradle
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" > /dev/null
+      - name: Create Project
+        run: |
+          rm -rf app build.gradle settings.gradle gradle* .gradle
           mkdir -p app/src/main/java/com/khoji/autoreply
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           cat > settings.gradle <<'EOF'
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          dependencyResolutionManagement { repositories { google(); mavenCentral() } }
           rootProject.name = "Khoji"
           include ':app'
           EOF
           cat > build.gradle <<'EOF'
-          plugins { id 'com.android.application' version '8.1.4' apply false; id 'org.jetbrains.kotlin.android' version '1.9.0' apply false }
+          plugins { id 'com.android.application' version '8.1.4' apply false; id 'org.jetbrains.kotlin.android' version '1.9.10' apply false }
           EOF
           cat > app/build.gradle <<'EOF'
           plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
@@ -38,7 +41,7 @@ jobs:
           <resources><string name="app_name">Khoji</string></resources>
           EOF
           cat > app/src/main/res/layout/activity_main.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="24dp"><TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Khoji 24h Auto Reply" android:textSize="20sp" android:textStyle="bold"/><Button android:id="@+id/btnPermission" android:text="Permission ON" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp"/><EditText android:id="@+id/etReply" android:hint="Reply likho" android:layout_width="match_parent" android:layout_height="120dp" android:layout_marginTop="20dp"/><Button android:id="@+id/btnSave" android:text="Save" android:layout_width="match_parent" android:layout_height="wrap_content"/></LinearLayout>
+          <?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="24dp"><TextView android:text="Khoji 24h Auto Reply" android:textSize="20sp" android:textStyle="bold" android:layout_width="match_parent" android:layout_height="wrap_content"/><Button android:id="@+id/btnPermission" android:text="Permission ON" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp"/><EditText android:id="@+id/etReply" android:hint="Reply likho" android:layout_width="match_parent" android:layout_height="120dp" android:layout_marginTop="20dp"/><Button android:id="@+id/btnSave" android:text="Save" android:layout_width="match_parent" android:layout_height="wrap_content"/></LinearLayout>
           EOF
           cat > app/src/main/java/com/khoji/autoreply/MainActivity.kt <<'EOF'
           package com.khoji.autoreply
@@ -58,19 +61,19 @@ jobs:
           import android.os.Bundle
           import android.service.notification.NotificationListenerService
           import android.service.notification.StatusBarNotification
-          class AutoReplyService:NotificationListenerService(){private val ok=listOf("com.whatsapp","com.whatsapp.w4b","com.facebook.orca","com.zhiliaoapp.musically","com.ss.android.ugc.trill");override fun onNotificationPosted(s:StatusBarNotification?){if(s==null)return;if(s.packageName !in ok)return;val r=getSharedPreferences("khoji_prefs",MODE_PRIVATE).getString("reply_text","Hi, Khoji here!")!!;val acts=s.notification.actions?:return;for(a in acts){val ri=a.remoteInputs?:continue;if(ri.isNotEmpty()){try{val i=Intent();val b=Bundle();for(x in ri)b.putCharSequence(x.resultKey,r);RemoteInput.addResultsToIntent(ri,i,b);a.actionIntent.send(this,0,i)}catch(_:Exception){};break}}}}
+          class AutoReplyService:NotificationListenerService(){private val ok=listOf("com.whatsapp","com.whatsapp.w4b","com.facebook.orca","com.zhiliaoapp.musically","com.ss.android.ugc.trill");override fun onNotificationPosted(s:StatusBarNotification?){if(s==null)return;if(s.packageName !in ok)return;val r=getSharedPreferences("khoji_prefs",MODE_PRIVATE).getString("reply_text","Hi!")!!;val acts=s.notification.actions?:return;for(a in acts){val ri=a.remoteInputs?:continue;if(ri.isNotEmpty()){try{val i=Intent();val b=Bundle();for(x in ri)b.putCharSequence(x.resultKey,r);RemoteInput.addResultsToIntent(ri,i,b);a.actionIntent.send(this,0,i)}catch(_:Exception){};break}}}}
           EOF
-      - name: Setup Gradle
+      - name: Build APK
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
-      - name: Build APK
+      - name: Run Build
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --stacktrace
+          ./gradlew :app:assembleDebug
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Khoji-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk
